@@ -1,4 +1,5 @@
 import { sql } from '@vercel/postgres';
+import { unstable_noStore as noStore } from 'next/cache';
 import {
   CustomerField,
   CustomersTableType,
@@ -13,7 +14,7 @@ import { formatCurrency } from './utils';
 export async function fetchRevenue() {
   // Add noStore() here to prevent the response from being cached.
   // This is equivalent to in fetch(..., {cache: 'no-store'}).
-
+  noStore();
   try {
     // Artificially delay a response for demo purposes.
     // Don't do this in production :)
@@ -33,6 +34,7 @@ export async function fetchRevenue() {
 }
 
 export async function fetchLatestInvoices() {
+  noStore();
   try {
     const data = await sql<LatestInvoiceRaw>`
       SELECT invoices.amount, customers.name, customers.image_url, customers.email, invoices.id
@@ -53,7 +55,9 @@ export async function fetchLatestInvoices() {
 }
 
 export async function fetchCardData() {
+  noStore();
   try {
+    // await new Promise((resolve) => setTimeout(resolve, 5000));
     // You can probably combine these into a single SQL query
     // However, we are intentionally splitting them to demonstrate
     // how to initialize multiple queries in parallel with JS.
@@ -92,6 +96,7 @@ export async function fetchFilteredInvoices(
   query: string,
   currentPage: number,
 ) {
+  noStore();
   const offset = (currentPage - 1) * ITEMS_PER_PAGE;
 
   try {
@@ -124,6 +129,7 @@ export async function fetchFilteredInvoices(
 }
 
 export async function fetchInvoicesPages(query: string) {
+  noStore();
   try {
     const count = await sql`SELECT COUNT(*)
     FROM invoices
@@ -145,6 +151,7 @@ export async function fetchInvoicesPages(query: string) {
 }
 
 export async function fetchInvoiceById(id: string) {
+  noStore();
   try {
     const data = await sql<InvoiceForm>`
       SELECT
@@ -161,7 +168,7 @@ export async function fetchInvoiceById(id: string) {
       // Convert amount from cents to dollars
       amount: invoice.amount / 100,
     }));
-
+    // console.log(invoice); // Invoice is an empty array []
     return invoice[0];
   } catch (error) {
     console.error('Database Error:', error);
@@ -170,6 +177,7 @@ export async function fetchInvoiceById(id: string) {
 }
 
 export async function fetchCustomers() {
+  noStore();
   try {
     const data = await sql<CustomerField>`
       SELECT
@@ -188,6 +196,7 @@ export async function fetchCustomers() {
 }
 
 export async function fetchFilteredCustomers(query: string) {
+  noStore();
   try {
     const data = await sql<CustomersTableType>`
 		SELECT
@@ -221,11 +230,38 @@ export async function fetchFilteredCustomers(query: string) {
 }
 
 export async function getUser(email: string) {
+  noStore();
   try {
     const user = await sql`SELECT * FROM users WHERE email=${email}`;
     return user.rows[0] as User;
   } catch (error) {
     console.error('Failed to fetch user:', error);
     throw new Error('Failed to fetch user.');
+  }
+}
+
+export async function fetchTransactionCustomers() {
+  noStore();
+  try {
+    const data = await sql`
+      SELECT c.id, c.Name, c.Email, c.Image_url , 
+      SUM(i.amount) AS total_invoices,
+        SUM(CASE WHEN i.status = 'paid' THEN i.amount ELSE 0 END) AS total_paid,
+        SUM(CASE WHEN i.status = 'pending' THEN i.amount ELSE 0 END) AS total_pending
+      FROM customers as c RIGHT JOIN invoices as i ON c.id = i.customer_id  
+      GROUP BY c.id
+        `;
+
+    const datas = data.rows.map((customer) => ({
+      ...customer,
+      total_pending: formatCurrency(customer.total_pending),
+      total_paid: formatCurrency(customer.total_paid),
+      total_invoices: formatCurrency(customer.total_invoices),
+    }));
+
+    return datas;
+  } catch (error) {
+    console.error('Failed to fetch transactions customers:', error);
+    throw new Error('Failed to fetch transactions customers.');
   }
 }
