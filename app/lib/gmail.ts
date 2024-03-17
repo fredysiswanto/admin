@@ -1,13 +1,8 @@
 import { google } from 'googleapis';
-import * as fs from 'fs';
-import * as readline from 'readline';
-import { promisify } from 'util';
-import * as dotenv from 'dotenv';
-import { redirect } from 'next/navigation';
-
-dotenv.config();
-
-const readFileAsync = promisify(fs.readFile);
+import open from 'open';
+import { TokenDB } from './definitions';
+import { sql } from '@vercel/postgres';
+import { string } from 'zod';
 
 // Load client secrets from environment variables
 const client_id: string = process.env.CLIENT_ID!;
@@ -20,75 +15,113 @@ const oAuth2Client = new google.auth.OAuth2(
   redirect_uri,
 );
 
-// Set up OAuth2 client
-async function authorize(): Promise<google.auth.OAuth2> {
-  // Check if we have previously stored a token
+function checkAuthExpiryDate(token: TokenDB) {
+  const now = new Date().getTime();
+  const expiryDate = token.expiry_date!;
+
+  if (now > expiryDate) {
+    console.log('Token expired');
+    return true;
+  }
+  console.log('Token not expired');
+  return false;
+}
+
+// get token in db
+async function getTokenFromDB() {
   try {
-    const token = await readFileAsync('token.json');
-    oAuth2Client.setCredentials(JSON.parse(token.toString()));
-    return oAuth2Client;
-  } catch (err) {
-    return getAccessToken();
+    const data =
+      await sql<TokenDB>`SELECT * FROM auth ORDER BY id DESC LIMIT 1`;
+    console.log('GET Token from DB', 'getTokenFromDB');
+    return data.rows[0];
+  } catch (error) {
+    console.error('Failed to fetch user:', error);
+    throw new Error('Failed to fetch user.');
+  }
+}
+
+// inser token to db
+async function setTokenIntoDB(token: TokenDB): Promise<TokenDB | null> {
+  console.log(token, 'token setTokenIntoDB');
+  try {
+    await sql<TokenDB>`INSERT INTO auth (access_token, code, refresh_token, scope, token_type, expiry_date) 
+      VALUES (
+        ${token.access_token},
+        ${token.code},
+        ${token.refresh_token},
+        ${token.scope},
+        ${token.token_type},
+        ${token.expiry_date}
+      )`;
+    console.log('Success inserted token into db');
+    return null;
+  } catch (error) {
+    console.error('Failed to inserted token into db:', error);
+    throw new Error('Failed to inserted token into db.');
   }
 }
 
 // Get new access token using refresh token
-async function refreshAccessToken(): Promise<google.auth.OAuth2 | null> {
-  try {
-    const token = await oAuth2Client.getAccessToken();
-    oAuth2Client.setCredentials(token.res?.data);
-    return oAuth2Client;
-  } catch (err) {
-    console.error('Error refreshing access token:', err);
-    return null;
+async function refreshAccessToken(token: TokenDB) {
+  // const token = await getTokenFromDB();
+  // console.log('Token:', token);
+  oAuth2Client.setCredentials(token);
+  const { credentials } = await oAuth2Client.refreshAccessToken();
+  console.log('Refreshed token:', credentials);
+  if (credentials) {
+    await setTokenIntoDB(credentials);
   }
+  return credentials;
 }
 
 // Get access token by using the authorization code
-async function getAccessToken(): Promise<google.auth.OAuth2 | null> {
+async function getAccessToken() {
   const authUrl = oAuth2Client.generateAuthUrl({
     access_type: 'offline',
     scope: ['https://www.googleapis.com/auth/gmail.readonly'],
     include_granted_scopes: true,
   });
   console.log('Authorize this app by visiting this URL:', authUrl);
-  redirect(authUrl);
-
-  const rl = readline.createInterface({
-    input: process.stdin,
-    output: process.stdout,
-  });
-
-  rl.question('Enter the code from that page here: ', async (code) => {
-    rl.close();
-    try {
-      const { tokens } = await oAuth2Client.getToken(code);
-      oAuth2Client.setCredentials(tokens);
-      fs.writeFile('token.json', JSON.stringify(tokens), (err) => {
-        if (err) return console.error('Error writing token to file:', err);
-        console.log('Token stored to token.json');
-      });
-      return oAuth2Client;
-    } catch (err) {
-      console.error('Error retrieving access token:', err);
-      return null;
-    }
-  });
-
+  await open(authUrl);
   return null;
 }
 
-async function main() {
-  const auth = await authorize();
-  if (!auth) return;
+export async function getNewToken(code: string) {
+  const { tokens }: { tokens: any } = await oAuth2Client.getToken(code);
+  tokens.code = code;
+  console.log(tokens);
 
-  // Use the auth object to make requests to Gmail API
-  const gmail = google.gmail({ version: 'v1', auth });
-
-  // Example: list labels
-  const res = await gmail.users.labels.list({ userId: 'me' });
-  console.log(res.data.labels);
+  oAuth2Client.setCredentials(tokens);
+  if (tokens) {
+    await setTokenIntoDB(tokens);
+  }
+  return tokens;
 }
 
-export default main;
-// main().catch(console.error);
+export async function authGmail() {
+  const token = await getTokenFromDB();
+  if (token && !checkAuthExpiryDate(token)) {
+    return token;
+  } else if (token && checkAuthExpiryDate(token)) {
+    const refreshToken = await refreshAccessToken(token);
+    return refreshToken;
+  } else {
+    try {
+      const code = await getAccessToken();
+      // const newToken = await getNewToken(code);
+      // return newToken;
+    } catch (error) {
+      console.error('Failed to authenticate:', error);
+      throw new Error('Failed to authenticate.');
+    }
+  }
+}
+// export async function authGmail() {
+//   const token = await getTokenFromDB();
+//   if (checkAuthExpiryDate(token)) {
+//     return token;
+//   } else {
+//     const refreshToken = await refreshAccessToken(token);
+//     return refreshToken;
+//   }
+// }

@@ -160,6 +160,34 @@ async function seedRevenue(client) {
   }
 }
 
+async function seedAuth(client) {
+  try {
+    // Create the "auth" table if it doesn't exist
+    const createTable = await client.sql`
+      CREATE TABLE IF NOT EXISTS auth (
+        id SERIAL PRIMARY KEY,
+        access_token VARCHAR(255),
+        code VARCHAR(255),
+        refresh_token VARCHAR(255),
+        scope VARCHAR(255),
+        token_type VARCHAR(50),
+        expiry_date BIGINT,
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+      );
+    `;
+
+    console.log(`Created "auth" table`);
+
+    return {
+      createTable,
+    };
+  } catch (error) {
+    console.error('Error seeding auth:', error);
+    throw error;
+  }
+}
+
 async function main() {
   const client = await db.connect();
 
@@ -167,7 +195,7 @@ async function main() {
   await seedCustomers(client);
   await seedInvoices(client);
   await seedRevenue(client);
-
+  await seedAuth(client);
   await client.end();
 }
 
