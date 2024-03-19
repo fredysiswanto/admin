@@ -33,7 +33,7 @@ async function getTokenFromDB() {
     const data =
       await sql<TokenDB>`SELECT * FROM auth ORDER BY id DESC LIMIT 1`;
     console.log('GET Token from DB');
-    console.log(data.rows[0]);
+    // console.log(data.rows[0]);
 
     return data.rows[0];
   } catch (error) {
