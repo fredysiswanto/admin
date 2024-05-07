@@ -120,3 +120,10 @@ export async function authGmail() {
     }
   }
 }
+
+export async function getOTPLatest() {
+  const base_url = process.env.BASE_URL;
+  const res = await fetch(`${base_url}/api/mails/latest?otp=true`);
+  const { data } = await res.json();
+  return data.otp;
+}
