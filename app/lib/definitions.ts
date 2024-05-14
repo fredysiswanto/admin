@@ -9,6 +9,17 @@ export type User = {
   password: string;
 };
 
+export type TokenDB = {
+  id?: number;
+  access_token?: string | null | undefined;
+  code?: string | null | undefined;
+  refresh_token?: string | null | undefined;
+  scope?: string;
+  token_type?: string | null | undefined;
+  expiry_date?: number | null | undefined;
+  created_at?: string;
+  updated_at?: string;
+};
 export type Customer = {
   id: string;
   name: string;
