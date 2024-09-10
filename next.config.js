@@ -13,6 +13,10 @@ const nextConfig = {
       },
     ];
   },
+  publicRuntimeConfig: {
+    docsDir: '/docs', // Path ke folder docs
+  },
+  trailingSlash: true,
 };
 
 module.exports = nextConfig;
