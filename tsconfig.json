@@ -13,6 +13,7 @@
     "isolatedModules": true,
     "jsx": "preserve",
     "incremental": true,
+    "forceConsistentCasingInFileNames": true,
     "plugins": [
       {
         "name": "next"
@@ -30,5 +31,5 @@
     "app/lib/placeholder-data.js",
     "scripts/seed.js"
   ],
-  "exclude": ["node_modules"]
+  "exclude": ["node_modules", "docs/**/*.js"]
 }

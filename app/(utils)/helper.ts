@@ -29,7 +29,7 @@ function findOtp(raw: string | null = null) {
     return null;
   }
   const text = Base64.decode(raw);
-  const otpPattern = /\b\d{5}\b/;
+  const otpPattern = /\b\d{6}\b/;
   const match = text.match(otpPattern);
   // console.log(match);
   if (match && match.length > 0) {
